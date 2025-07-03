@@ -1,18 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plus, Calendar, Clock, User, AlertCircle, CheckCircle2, Circle, Edit, Trash2, X, Phone, Mail, Users, FileText, Grid, Columns, Filter } from 'lucide-react';
-
-interface Task {
-  id: number;
-  title: string;
-  description: string;
-  priority: 'low' | 'medium' | 'high' | 'urgent';
-  status: 'pending' | 'in-progress' | 'completed';
-  dueDate: string;
-  assignee: string;
-  relatedTo: string;
-  type: 'call' | 'email' | 'meeting' | 'follow-up' | 'other';
-  createdAt: string;
-}
+import { taskService, Task, CreateTaskData, UpdateTaskData } from '../services/taskService';
 
 interface TasksProps {
   searchTerm: string;
@@ -26,108 +14,56 @@ const Tasks: React.FC<TasksProps> = ({ searchTerm }) => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-  const [tasks, setTasks] = useState<Task[]>([
-    {
-      id: 1,
-      title: 'Follow-up call with Sarah Johnson',
-      description: 'Discuss the enterprise software license renewal terms',
-      priority: 'high',
-      status: 'pending',
-      dueDate: '2024-01-16',
-      assignee: 'John Doe',
-      relatedTo: 'TechCorp Solutions',
-      type: 'call',
-      createdAt: '2024-01-10',
-    },
-    {
-      id: 2,
-      title: 'Send proposal to Innovate.io',
-      description: 'Cloud migration services proposal with detailed timeline',
-      priority: 'urgent',
-      status: 'in-progress',
-      dueDate: '2024-01-17',
-      assignee: 'Jane Smith',
-      relatedTo: 'Innovate.io',
-      type: 'email',
-      createdAt: '2024-01-11',
-    },
-    {
-      id: 3,
-      title: 'Schedule demo meeting',
-      description: 'Product demonstration for Digital Future Inc',
-      priority: 'medium',
-      status: 'completed',
-      dueDate: '2024-01-15',
-      assignee: 'Mike Johnson',
-      relatedTo: 'Digital Future Inc',
-      type: 'meeting',
-      createdAt: '2024-01-12',
-    },
-    {
-      id: 4,
-      title: 'Contract review reminder',
-      description: 'Review and update contract terms for StartupX deal',
-      priority: 'medium',
-      status: 'pending',
-      dueDate: '2024-01-18',
-      assignee: 'Sarah Wilson',
-      relatedTo: 'StartupX',
-      type: 'other',
-      createdAt: '2024-01-13',
-    },
-    {
-      id: 5,
-      title: 'Quarterly business review prep',
-      description: 'Prepare presentation materials for QBR with key accounts',
-      priority: 'low',
-      status: 'completed',
-      dueDate: '2024-01-22',
-      assignee: 'John Doe',
-      relatedTo: 'Multiple Accounts',
-      type: 'other',
-      createdAt: '2024-01-14',
-    },
-    {
-      id: 6,
-      title: 'Client onboarding call',
-      description: 'Welcome new client and setup initial requirements',
-      priority: 'urgent',
-      status: 'completed',
-      dueDate: '2024-01-14',
-      assignee: 'Jane Smith',
-      relatedTo: 'NewCorp Inc',
-      type: 'call',
-      createdAt: '2024-01-09',
-    },
-  ]);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<CreateTaskData>({
     title: '',
     description: '',
-    priority: 'medium' as Task['priority'],
-    status: 'pending' as Task['status'],
-    dueDate: '',
-    assignee: '',
-    relatedTo: '',
-    type: 'other' as Task['type'],
+    type: 'Other',
+    priority: 'Medium',
+    status: 'Open',
+    due_date: '',
+    related_to: '',
   });
+
+  // Load tasks on component mount
+  useEffect(() => {
+    loadTasks();
+  }, []);
+
+  const loadTasks = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const tasksData = await taskService.getTasks();
+      setTasks(tasksData);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load tasks');
+      console.error('Failed to load tasks:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const filteredTasks = tasks.filter(task =>
     task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
     task.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    task.relatedTo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    task.assignee.toLowerCase().includes(searchTerm.toLowerCase())
+    task.related_to.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    task.type.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (task.assignee?.name && task.assignee.name.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case 'urgent':
+      case 'Urgent':
         return 'bg-red-100 text-red-800 border-red-200';
-      case 'high':
+      case 'High':
         return 'bg-orange-100 text-orange-800 border-orange-200';
-      case 'medium':
+      case 'Medium':
         return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-      case 'low':
+      case 'Low':
         return 'bg-green-100 text-green-800 border-green-200';
       default:
         return 'bg-gray-100 text-gray-800 border-gray-200';
@@ -136,11 +72,12 @@ const Tasks: React.FC<TasksProps> = ({ searchTerm }) => {
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'completed':
+      case 'Completed':
+      case 'Closed':
         return <CheckCircle2 size={20} className="text-green-600" />;
-      case 'in-progress':
+      case 'In Progress':
         return <Clock size={20} className="text-blue-600" />;
-      case 'pending':
+      case 'Open':
         return <Circle size={20} className="text-gray-400" />;
       default:
         return <Circle size={20} className="text-gray-400" />;
@@ -149,11 +86,12 @@ const Tasks: React.FC<TasksProps> = ({ searchTerm }) => {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'completed':
+      case 'Completed':
+      case 'Closed':
         return 'bg-green-100 text-green-800';
-      case 'in-progress':
+      case 'In Progress':
         return 'bg-blue-100 text-blue-800';
-      case 'pending':
+      case 'Open':
         return 'bg-gray-100 text-gray-800';
       default:
         return 'bg-gray-100 text-gray-800';
@@ -161,7 +99,7 @@ const Tasks: React.FC<TasksProps> = ({ searchTerm }) => {
   };
 
   const getTypeIcon = (type: string) => {
-    switch (type) {
+    switch (type.toLowerCase()) {
       case 'call':
         return <Phone size={16} className="text-green-600" />;
       case 'email':
@@ -175,64 +113,75 @@ const Tasks: React.FC<TasksProps> = ({ searchTerm }) => {
     }
   };
 
-  const isOverdue = (dueDate: string) => {
-    return new Date(dueDate) < new Date() && new Date(dueDate).toDateString() !== new Date().toDateString();
+  const isOverdue = (dueDate: string, status: string) => {
+    return new Date(dueDate) < new Date() && 
+           new Date(dueDate).toDateString() !== new Date().toDateString() &&
+           status !== 'Completed' && status !== 'Closed';
   };
 
   const resetForm = () => {
     setFormData({
       title: '',
       description: '',
-      priority: 'medium',
-      status: 'pending',
-      dueDate: '',
-      assignee: '',
-      relatedTo: '',
-      type: 'other',
+      type: 'Other',
+      priority: 'Medium',
+      status: 'Open',
+      due_date: '',
+      related_to: '',
     });
   };
 
-  const handleAddTask = () => {
-    if (!formData.title || !formData.dueDate) return;
+  const handleAddTask = async () => {
+    if (!formData.title || !formData.due_date) return;
 
-    const newTask: Task = {
-      id: Math.max(...tasks.map(t => t.id)) + 1,
-      ...formData,
-      createdAt: new Date().toISOString().split('T')[0],
-    };
-
-    setTasks([...tasks, newTask]);
-    resetForm();
-    setShowAddModal(false);
+    try {
+      await taskService.createTask(formData);
+      await loadTasks(); // Reload tasks
+      resetForm();
+      setShowAddModal(false);
+    } catch (err) {
+      console.error('Failed to create task:', err);
+      setError(err instanceof Error ? err.message : 'Failed to create task');
+    }
   };
 
-  const handleEditTask = () => {
-    if (!selectedTask || !formData.title || !formData.dueDate) return;
+  const handleEditTask = async () => {
+    if (!selectedTask || !formData.title || !formData.due_date) return;
 
-    setTasks(tasks.map(task =>
-      task.id === selectedTask.id
-        ? { ...task, ...formData }
-        : task
-    ));
-    setShowEditModal(false);
-    setSelectedTask(null);
-    resetForm();
+    try {
+      await taskService.updateTask(selectedTask.id, formData);
+      await loadTasks(); // Reload tasks
+      setShowEditModal(false);
+      setSelectedTask(null);
+      resetForm();
+    } catch (err) {
+      console.error('Failed to update task:', err);
+      setError(err instanceof Error ? err.message : 'Failed to update task');
+    }
   };
 
-  const handleDeleteTask = () => {
+  const handleDeleteTask = async () => {
     if (!selectedTask) return;
 
-    setTasks(tasks.filter(task => task.id !== selectedTask.id));
-    setShowDeleteModal(false);
-    setSelectedTask(null);
+    try {
+      await taskService.deleteTask(selectedTask.id);
+      await loadTasks(); // Reload tasks
+      setShowDeleteModal(false);
+      setSelectedTask(null);
+    } catch (err) {
+      console.error('Failed to delete task:', err);
+      setError(err instanceof Error ? err.message : 'Failed to delete task');
+    }
   };
 
-  const handleStatusChange = (taskId: number, newStatus: Task['status']) => {
-    setTasks(tasks.map(task =>
-      task.id === taskId
-        ? { ...task, status: newStatus }
-        : task
-    ));
+  const handleStatusChange = async (taskId: number, newStatus: Task['status']) => {
+    try {
+      await taskService.updateStatus(taskId, newStatus);
+      await loadTasks(); // Reload tasks
+    } catch (err) {
+      console.error('Failed to update task status:', err);
+      setError(err instanceof Error ? err.message : 'Failed to update task status');
+    }
   };
 
   const openEditModal = (task: Task) => {
@@ -240,12 +189,11 @@ const Tasks: React.FC<TasksProps> = ({ searchTerm }) => {
     setFormData({
       title: task.title,
       description: task.description,
+      type: task.type,
       priority: task.priority,
       status: task.status,
-      dueDate: task.dueDate,
-      assignee: task.assignee,
-      relatedTo: task.relatedTo,
-      type: task.type,
+      due_date: task.due_date,
+      related_to: task.related_to,
     });
     setShowEditModal(true);
   };
@@ -255,20 +203,20 @@ const Tasks: React.FC<TasksProps> = ({ searchTerm }) => {
     setShowDeleteModal(true);
   };
 
-  const pendingTasks = filteredTasks.filter(task => task.status === 'pending');
-  const inProgressTasks = filteredTasks.filter(task => task.status === 'in-progress');
-  const completedTasks = filteredTasks.filter(task => task.status === 'completed');
-  const overdueTasks = filteredTasks.filter(task => isOverdue(task.dueDate) && task.status !== 'completed');
+  const pendingTasks = filteredTasks.filter(task => task.status === 'Open');
+  const inProgressTasks = filteredTasks.filter(task => task.status === 'In Progress');
+  const completedTasks = filteredTasks.filter(task => task.status === 'Completed' || task.status === 'Closed');
+  const overdueTasks = filteredTasks.filter(task => isOverdue(task.due_date, task.status));
 
-  const urgentTasks = filteredTasks.filter(task => task.priority === 'urgent');
-  const highTasks = filteredTasks.filter(task => task.priority === 'high');
-  const mediumTasks = filteredTasks.filter(task => task.priority === 'medium');
-  const lowTasks = filteredTasks.filter(task => task.priority === 'low');
+  const urgentTasks = filteredTasks.filter(task => task.priority === 'Urgent');
+  const highTasks = filteredTasks.filter(task => task.priority === 'High');
+  const mediumTasks = filteredTasks.filter(task => task.priority === 'Medium');
+  const lowTasks = filteredTasks.filter(task => task.priority === 'Low');
 
   const TaskCard: React.FC<{ task: Task }> = ({ task }) => (
     <div className={`bg-white rounded-xl p-4 border shadow-sm hover:shadow-md transition-all duration-300 ${
-      isOverdue(task.dueDate) && task.status !== 'completed' ? 'border-l-4 border-l-red-500' : 'border-gray-100'
-    } ${task.status === 'completed' ? 'opacity-75' : ''}`}>
+      isOverdue(task.due_date, task.status) ? 'border-l-4 border-l-red-500' : 'border-gray-100'
+    } ${task.status === 'Completed' || task.status === 'Closed' ? 'opacity-75' : ''}`}>
       <div className="flex items-start justify-between">
         <div className="flex items-start space-x-3 flex-1">
           <div className="mt-1">
@@ -277,50 +225,53 @@ const Tasks: React.FC<TasksProps> = ({ searchTerm }) => {
           <div className="flex-1">
             <div className="flex items-center space-x-2 mb-2">
               {getTypeIcon(task.type)}
-              <h4 className={`font-semibold text-gray-900 ${task.status === 'completed' ? 'line-through text-gray-500' : ''}`}>
+              <h4 className={`font-semibold text-gray-900 ${task.status === 'Completed' || task.status === 'Closed' ? 'line-through text-gray-500' : ''}`}>
                 {task.title}
               </h4>
               <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getPriorityColor(task.priority)}`}>
-                {task.priority.charAt(0).toUpperCase() + task.priority.slice(1)}
+                {task.priority}
               </span>
             </div>
-            <p className={`text-gray-600 mb-3 text-sm ${task.status === 'completed' ? 'line-through text-gray-400' : ''}`}>
+            <p className={`text-gray-600 mb-3 text-sm ${task.status === 'Completed' || task.status === 'Closed' ? 'line-through text-gray-400' : ''}`}>
               {task.description}
             </p>
             <div className="flex items-center space-x-4 text-xs text-gray-500">
               <div className="flex items-center space-x-1">
                 <Calendar size={12} />
-                <span className={isOverdue(task.dueDate) && task.status !== 'completed' ? 'text-red-600 font-medium' : ''}>
-                  {new Date(task.dueDate).toLocaleDateString()}
+                <span className={isOverdue(task.due_date, task.status) ? 'text-red-600 font-medium' : ''}>
+                  {new Date(task.due_date).toLocaleDateString()}
                 </span>
               </div>
               <div className="flex items-center space-x-1">
                 <User size={12} />
-                <span>{task.assignee}</span>
+                <span>{task.assignee?.name || 'Unassigned'}</span>
+              </div>
+              <div className="flex items-center space-x-1">
+                <span>Type: {task.type}</span>
               </div>
             </div>
           </div>
         </div>
         <div className="flex items-center space-x-1">
-          {task.status === 'pending' && (
+          {task.status === 'Open' && (
             <button
-              onClick={() => handleStatusChange(task.id, 'in-progress')}
+              onClick={() => handleStatusChange(task.id, 'In Progress')}
               className="text-blue-600 hover:text-blue-700 text-xs font-medium px-2 py-1 rounded-md hover:bg-blue-50 transition-colors"
             >
               Start
             </button>
           )}
-          {task.status === 'in-progress' && (
+          {task.status === 'In Progress' && (
             <button
-              onClick={() => handleStatusChange(task.id, 'completed')}
+              onClick={() => handleStatusChange(task.id, 'Completed')}
               className="text-green-600 hover:text-green-700 text-xs font-medium px-2 py-1 rounded-md hover:bg-green-50 transition-colors"
             >
               Complete
             </button>
           )}
-          {task.status === 'completed' && (
+          {(task.status === 'Completed' || task.status === 'Closed') && (
             <button
-              onClick={() => handleStatusChange(task.id, 'pending')}
+              onClick={() => handleStatusChange(task.id, 'Open')}
               className="text-gray-600 hover:text-gray-700 text-xs font-medium px-2 py-1 rounded-md hover:bg-gray-50 transition-colors"
             >
               Reopen
@@ -366,12 +317,36 @@ const Tasks: React.FC<TasksProps> = ({ searchTerm }) => {
   );
 
   const renderContent = () => {
+    if (loading) {
+      return (
+        <div className="flex items-center justify-center py-12">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        </div>
+      );
+    }
+
+    if (error) {
+      return (
+        <div className="text-center py-12">
+          <AlertCircle size={48} className="mx-auto text-red-400 mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">Error loading tasks</h3>
+          <p className="text-gray-600 mb-4">{error}</p>
+          <button
+            onClick={loadTasks}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      );
+    }
+
     switch (viewMode) {
       case 'status':
         return (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <ColumnView
-              title="Pending"
+              title="Open"
               tasks={pendingTasks}
               color="bg-gray-100 text-gray-800"
               icon={<Circle size={20} className="text-gray-600" />}
@@ -424,8 +399,8 @@ const Tasks: React.FC<TasksProps> = ({ searchTerm }) => {
           <div className="space-y-4">
             {filteredTasks.map((task) => (
               <div key={task.id} className={`bg-white rounded-xl p-6 border shadow-sm hover:shadow-md transition-shadow ${
-                isOverdue(task.dueDate) && task.status !== 'completed' ? 'border-l-4 border-l-red-500' : 'border-gray-100'
-              } ${task.status === 'completed' ? 'opacity-75' : ''}`}>
+                isOverdue(task.due_date, task.status) ? 'border-l-4 border-l-red-500' : 'border-gray-100'
+              } ${task.status === 'Completed' || task.status === 'Closed' ? 'opacity-75' : ''}`}>
                 <div className="flex items-start justify-between">
                   <div className="flex items-start space-x-4 flex-1">
                     <div className="mt-1">
@@ -434,56 +409,59 @@ const Tasks: React.FC<TasksProps> = ({ searchTerm }) => {
                     <div className="flex-1">
                       <div className="flex items-center space-x-3 mb-2">
                         {getTypeIcon(task.type)}
-                        <h4 className={`font-semibold text-gray-900 ${task.status === 'completed' ? 'line-through text-gray-500' : ''}`}>
+                        <h4 className={`font-semibold text-gray-900 ${task.status === 'Completed' || task.status === 'Closed' ? 'line-through text-gray-500' : ''}`}>
                           {task.title}
                         </h4>
                         <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getPriorityColor(task.priority)}`}>
-                          {task.priority.charAt(0).toUpperCase() + task.priority.slice(1)}
+                          {task.priority}
                         </span>
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(task.status)}`}>
-                          {task.status.charAt(0).toUpperCase() + task.status.slice(1).replace('-', ' ')}
+                          {task.status}
                         </span>
                       </div>
-                      <p className={`text-gray-600 mb-3 ${task.status === 'completed' ? 'line-through text-gray-400' : ''}`}>
+                      <p className={`text-gray-600 mb-3 ${task.status === 'Completed' || task.status === 'Closed' ? 'line-through text-gray-400' : ''}`}>
                         {task.description}
                       </p>
                       <div className="flex items-center space-x-6 text-sm text-gray-500">
                         <div className="flex items-center space-x-1">
                           <Calendar size={14} />
-                          <span className={isOverdue(task.dueDate) && task.status !== 'completed' ? 'text-red-600 font-medium' : ''}>
-                            Due: {new Date(task.dueDate).toLocaleDateString()}
+                          <span className={isOverdue(task.due_date, task.status) ? 'text-red-600 font-medium' : ''}>
+                            Due: {new Date(task.due_date).toLocaleDateString()}
                           </span>
                         </div>
                         <div className="flex items-center space-x-1">
                           <User size={14} />
-                          <span>{task.assignee}</span>
+                          <span>{task.assignee?.name || 'Unassigned'}</span>
                         </div>
                         <div className="flex items-center space-x-1">
-                          <span>Related to: {task.relatedTo}</span>
+                          <span>Type: {task.type}</span>
+                        </div>
+                        <div className="flex items-center space-x-1">
+                          <span>Related to: {task.related_to}</span>
                         </div>
                       </div>
                     </div>
                   </div>
                   <div className="flex items-center space-x-2">
-                    {task.status === 'pending' && (
+                    {task.status === 'Open' && (
                       <button
-                        onClick={() => handleStatusChange(task.id, 'in-progress')}
+                        onClick={() => handleStatusChange(task.id, 'In Progress')}
                         className="text-blue-600 hover:text-blue-700 text-sm font-medium px-3 py-1 rounded-md hover:bg-blue-50 transition-colors"
                       >
                         Start
                       </button>
                     )}
-                    {task.status === 'in-progress' && (
+                    {task.status === 'In Progress' && (
                       <button
-                        onClick={() => handleStatusChange(task.id, 'completed')}
+                        onClick={() => handleStatusChange(task.id, 'Completed')}
                         className="text-green-600 hover:text-green-700 text-sm font-medium px-3 py-1 rounded-md hover:bg-green-50 transition-colors"
                       >
                         Complete
                       </button>
                     )}
-                    {task.status === 'completed' && (
+                    {(task.status === 'Completed' || task.status === 'Closed') && (
                       <button
-                        onClick={() => handleStatusChange(task.id, 'pending')}
+                        onClick={() => handleStatusChange(task.id, 'Open')}
                         className="text-gray-600 hover:text-gray-700 text-sm font-medium px-3 py-1 rounded-md hover:bg-gray-50 transition-colors"
                       >
                         Reopen
@@ -612,7 +590,7 @@ const Tasks: React.FC<TasksProps> = ({ searchTerm }) => {
       {/* Tasks Content */}
       {renderContent()}
 
-      {filteredTasks.length === 0 && (
+      {filteredTasks.length === 0 && !loading && !error && (
         <div className="text-center py-12">
           <CheckCircle2 size={48} className="mx-auto text-gray-400 mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No tasks found</h3>
@@ -661,14 +639,15 @@ const Tasks: React.FC<TasksProps> = ({ searchTerm }) => {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
                 <select
                   value={formData.type}
-                  onChange={(e) => setFormData({ ...formData, type: e.target.value as Task['type'] })}
+                  onChange={(e) => setFormData({ ...formData, type: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
-                  <option value="call">Call</option>
-                  <option value="email">Email</option>
-                  <option value="meeting">Meeting</option>
-                  <option value="follow-up">Follow-up</option>
-                  <option value="other">Other</option>
+                  <option value="Call">Call</option>
+                  <option value="Email">Email</option>
+                  <option value="Meeting">Meeting</option>
+                  <option value="Follow-up">Follow-up</option>
+                  <option value="Report">Report</option>
+                  <option value="Other">Other</option>
                 </select>
               </div>
 
@@ -679,10 +658,10 @@ const Tasks: React.FC<TasksProps> = ({ searchTerm }) => {
                   onChange={(e) => setFormData({ ...formData, priority: e.target.value as Task['priority'] })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
-                  <option value="low">Low</option>
-                  <option value="medium">Medium</option>
-                  <option value="high">High</option>
-                  <option value="urgent">Urgent</option>
+                  <option value="Low">Low</option>
+                  <option value="Medium">Medium</option>
+                  <option value="High">High</option>
+                  <option value="Urgent">Urgent</option>
                 </select>
               </div>
 
@@ -693,9 +672,10 @@ const Tasks: React.FC<TasksProps> = ({ searchTerm }) => {
                   onChange={(e) => setFormData({ ...formData, status: e.target.value as Task['status'] })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
-                  <option value="pending">Pending</option>
-                  <option value="in-progress">In Progress</option>
-                  <option value="completed">Completed</option>
+                  <option value="Open">Open</option>
+                  <option value="In Progress">In Progress</option>
+                  <option value="Completed">Completed</option>
+                  <option value="Closed">Closed</option>
                 </select>
               </div>
 
@@ -703,29 +683,18 @@ const Tasks: React.FC<TasksProps> = ({ searchTerm }) => {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Due Date *</label>
                 <input
                   type="date"
-                  value={formData.dueDate}
-                  onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
+                  value={formData.due_date}
+                  onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Assignee</label>
-                <input
-                  type="text"
-                  value={formData.assignee}
-                  onChange={(e) => setFormData({ ...formData, assignee: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Enter assignee name"
-                />
-              </div>
-
-              <div>
+              <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Related To</label>
                 <input
                   type="text"
-                  value={formData.relatedTo}
-                  onChange={(e) => setFormData({ ...formData, relatedTo: e.target.value })}
+                  value={formData.related_to}
+                  onChange={(e) => setFormData({ ...formData, related_to: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="Enter related company or contact"
                 />
@@ -741,7 +710,7 @@ const Tasks: React.FC<TasksProps> = ({ searchTerm }) => {
               </button>
               <button
                 onClick={handleAddTask}
-                disabled={!formData.title || !formData.dueDate}
+                disabled={!formData.title || !formData.due_date}
                 className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Add Task
@@ -792,14 +761,15 @@ const Tasks: React.FC<TasksProps> = ({ searchTerm }) => {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
                 <select
                   value={formData.type}
-                  onChange={(e) => setFormData({ ...formData, type: e.target.value as Task['type'] })}
+                  onChange={(e) => setFormData({ ...formData, type: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
-                  <option value="call">Call</option>
-                  <option value="email">Email</option>
-                  <option value="meeting">Meeting</option>
-                  <option value="follow-up">Follow-up</option>
-                  <option value="other">Other</option>
+                  <option value="Call">Call</option>
+                  <option value="Email">Email</option>
+                  <option value="Meeting">Meeting</option>
+                  <option value="Follow-up">Follow-up</option>
+                  <option value="Report">Report</option>
+                  <option value="Other">Other</option>
                 </select>
               </div>
 
@@ -810,10 +780,10 @@ const Tasks: React.FC<TasksProps> = ({ searchTerm }) => {
                   onChange={(e) => setFormData({ ...formData, priority: e.target.value as Task['priority'] })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
-                  <option value="low">Low</option>
-                  <option value="medium">Medium</option>
-                  <option value="high">High</option>
-                  <option value="urgent">Urgent</option>
+                  <option value="Low">Low</option>
+                  <option value="Medium">Medium</option>
+                  <option value="High">High</option>
+                  <option value="Urgent">Urgent</option>
                 </select>
               </div>
 
@@ -824,9 +794,10 @@ const Tasks: React.FC<TasksProps> = ({ searchTerm }) => {
                   onChange={(e) => setFormData({ ...formData, status: e.target.value as Task['status'] })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
-                  <option value="pending">Pending</option>
-                  <option value="in-progress">In Progress</option>
-                  <option value="completed">Completed</option>
+                  <option value="Open">Open</option>
+                  <option value="In Progress">In Progress</option>
+                  <option value="Completed">Completed</option>
+                  <option value="Closed">Closed</option>
                 </select>
               </div>
 
@@ -834,29 +805,18 @@ const Tasks: React.FC<TasksProps> = ({ searchTerm }) => {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Due Date *</label>
                 <input
                   type="date"
-                  value={formData.dueDate}
-                  onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
+                  value={formData.due_date}
+                  onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Assignee</label>
-                <input
-                  type="text"
-                  value={formData.assignee}
-                  onChange={(e) => setFormData({ ...formData, assignee: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Enter assignee name"
-                />
-              </div>
-
-              <div>
+              <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Related To</label>
                 <input
                   type="text"
-                  value={formData.relatedTo}
-                  onChange={(e) => setFormData({ ...formData, relatedTo: e.target.value })}
+                  value={formData.related_to}
+                  onChange={(e) => setFormData({ ...formData, related_to: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="Enter related company or contact"
                 />
@@ -872,7 +832,7 @@ const Tasks: React.FC<TasksProps> = ({ searchTerm }) => {
               </button>
               <button
                 onClick={handleEditTask}
-                disabled={!formData.title || !formData.dueDate}
+                disabled={!formData.title || !formData.due_date}
                 className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Update Task

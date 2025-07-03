@@ -1,40 +1,40 @@
 import { httpClient, ApiResponse, PaginatedResponse, apiUtils } from './api';
+import { authService } from './authService';
 
-// Task related types
+// Task related types based on your API response
 export interface Task {
-  id: string;
+  id: number;
+  organisation_id: number;
+  assignee_id: number;
   title: string;
-  description?: string;
-  priority: 'low' | 'medium' | 'high' | 'urgent';
-  status: 'pending' | 'in-progress' | 'completed';
-  dueDate: string;
-  assigneeId?: string;
-  assignee?: string;
-  relatedTo?: string;
-  relatedType?: 'contact' | 'opportunity' | 'organization';
-  relatedId?: string;
-  type: 'call' | 'email' | 'meeting' | 'follow-up' | 'other';
-  tags: string[];
-  notes?: string;
-  completedAt?: string;
-  createdAt: string;
-  updatedAt: string;
-  organizationId: string;
+  description: string;
+  type: string;
+  priority: 'Low' | 'Medium' | 'High' | 'Urgent';
+  status: 'Open' | 'In Progress' | 'Completed' | 'Closed';
+  due_date: string;
+  related_to: string;
+  created_at: string;
+  updated_at: string;
+  assignee?: {
+    id: number;
+    name: string;
+    email: string;
+    email_verified_at: string | null;
+    created_at: string;
+    updated_at: string;
+    organisation_id: number;
+  };
 }
 
 export interface CreateTaskData {
   title: string;
-  description?: string;
-  priority?: Task['priority'];
-  status?: Task['status'];
-  dueDate: string;
-  assigneeId?: string;
-  relatedTo?: string;
-  relatedType?: Task['relatedType'];
-  relatedId?: string;
-  type?: Task['type'];
-  tags?: string[];
-  notes?: string;
+  description: string;
+  type: string;
+  priority: 'Low' | 'Medium' | 'High' | 'Urgent';
+  status: 'Open' | 'In Progress' | 'Completed' | 'Closed';
+  due_date: string;
+  related_to: string;
+  assignee_id?: number;
 }
 
 export interface UpdateTaskData extends Partial<CreateTaskData> {}
@@ -42,62 +42,44 @@ export interface UpdateTaskData extends Partial<CreateTaskData> {}
 export interface TaskFilters {
   status?: Task['status'];
   priority?: Task['priority'];
-  type?: Task['type'];
-  assigneeId?: string;
-  relatedType?: Task['relatedType'];
-  relatedId?: string;
-  tags?: string[];
+  type?: string;
+  assignee_id?: number;
   search?: string;
-  dueDateFrom?: string;
-  dueDateTo?: string;
-  overdue?: boolean;
+  due_date_from?: string;
+  due_date_to?: string;
 }
 
 export interface TaskStats {
   total: number;
-  pending: number;
+  open: number;
   inProgress: number;
   completed: number;
+  closed: number;
   overdue: number;
   dueToday: number;
   dueTomorrow: number;
   dueThisWeek: number;
   byPriority: Record<Task['priority'], number>;
-  byType: Record<Task['type'], number>;
+  byType: Record<string, number>;
   completionRate: number;
 }
 
 // Task service class
 class TaskService {
   /**
-   * Get all tasks with pagination and filters
+   * Get all tasks for current user
    */
-  async getTasks(
-    page: number = 1,
-    limit: number = 20,
-    filters?: TaskFilters
-  ): Promise<PaginatedResponse<Task>> {
+  async getTasks(): Promise<Task[]> {
     try {
-      const params = apiUtils.createPaginationParams(page, limit, filters?.search);
-      
-      // Add filter parameters
-      if (filters) {
-        if (filters.status) params.status = filters.status;
-        if (filters.priority) params.priority = filters.priority;
-        if (filters.type) params.type = filters.type;
-        if (filters.assigneeId) params.assigneeId = filters.assigneeId;
-        if (filters.relatedType) params.relatedType = filters.relatedType;
-        if (filters.relatedId) params.relatedId = filters.relatedId;
-        if (filters.tags?.length) params.tags = filters.tags.join(',');
-        if (filters.dueDateFrom) params.dueDateFrom = filters.dueDateFrom;
-        if (filters.dueDateTo) params.dueDateTo = filters.dueDateTo;
-        if (filters.overdue !== undefined) params.overdue = filters.overdue;
+      const currentUser = authService.getStoredUser();
+      if (!currentUser) {
+        throw new Error('User not authenticated');
       }
 
-      const response = await httpClient.get<Task[]>('/tasks', apiUtils.formatParams(params));
+      const response = await httpClient.get<Task[]>(`/users/${currentUser.id}/tasks`);
       
-      if (response.success) {
-        return response as PaginatedResponse<Task>;
+      if (response.success && response.data) {
+        return response.data;
       }
       
       throw new Error(response.message || 'Failed to fetch tasks');
@@ -110,7 +92,7 @@ class TaskService {
   /**
    * Get task by ID
    */
-  async getTask(id: string): Promise<Task> {
+  async getTask(id: number): Promise<Task> {
     try {
       const response = await httpClient.get<Task>(`/tasks/${id}`);
       
@@ -130,7 +112,19 @@ class TaskService {
    */
   async createTask(taskData: CreateTaskData): Promise<Task> {
     try {
-      const response = await httpClient.post<Task>('/tasks', taskData);
+      const currentUser = authService.getStoredUser();
+      if (!currentUser) {
+        throw new Error('User not authenticated');
+      }
+
+      // Add current user's organisation_id and assignee_id if not provided
+      const payload = {
+        ...taskData,
+        organisation_id: currentUser.organisation_id,
+        assignee_id: taskData.assignee_id || currentUser.id,
+      };
+
+      const response = await httpClient.post<Task>('/tasks', payload);
       
       if (response.success && response.data) {
         return response.data;
@@ -146,7 +140,7 @@ class TaskService {
   /**
    * Update task
    */
-  async updateTask(id: string, taskData: UpdateTaskData): Promise<Task> {
+  async updateTask(id: number, taskData: UpdateTaskData): Promise<Task> {
     try {
       const response = await httpClient.put<Task>(`/tasks/${id}`, taskData);
       
@@ -164,7 +158,7 @@ class TaskService {
   /**
    * Delete task
    */
-  async deleteTask(id: string): Promise<void> {
+  async deleteTask(id: number): Promise<void> {
     try {
       const response = await httpClient.delete(`/tasks/${id}`);
       
@@ -180,9 +174,9 @@ class TaskService {
   /**
    * Update task status
    */
-  async updateStatus(id: string, status: Task['status']): Promise<Task> {
+  async updateStatus(id: number, status: Task['status']): Promise<Task> {
     try {
-      const response = await httpClient.patch<Task>(`/tasks/${id}/status`, { status });
+      const response = await httpClient.put<Task>(`/tasks/${id}`, { status });
       
       if (response.success && response.data) {
         return response.data;
@@ -198,9 +192,9 @@ class TaskService {
   /**
    * Update task priority
    */
-  async updatePriority(id: string, priority: Task['priority']): Promise<Task> {
+  async updatePriority(id: number, priority: Task['priority']): Promise<Task> {
     try {
-      const response = await httpClient.patch<Task>(`/tasks/${id}/priority`, { priority });
+      const response = await httpClient.put<Task>(`/tasks/${id}`, { priority });
       
       if (response.success && response.data) {
         return response.data;
@@ -214,117 +208,44 @@ class TaskService {
   }
 
   /**
-   * Assign task to user
+   * Get task statistics (calculated from tasks)
    */
-  async assignTask(id: string, assigneeId: string): Promise<Task> {
+  async getTaskStats(): Promise<TaskStats> {
     try {
-      const response = await httpClient.patch<Task>(`/tasks/${id}/assign`, { assigneeId });
+      const tasks = await this.getTasks();
       
-      if (response.success && response.data) {
-        return response.data;
-      }
+      const stats: TaskStats = {
+        total: tasks.length,
+        open: tasks.filter(t => t.status === 'Open').length,
+        inProgress: tasks.filter(t => t.status === 'In Progress').length,
+        completed: tasks.filter(t => t.status === 'Completed').length,
+        closed: tasks.filter(t => t.status === 'Closed').length,
+        overdue: tasks.filter(t => new Date(t.due_date) < new Date() && t.status !== 'Completed' && t.status !== 'Closed').length,
+        dueToday: tasks.filter(t => new Date(t.due_date).toDateString() === new Date().toDateString()).length,
+        dueTomorrow: tasks.filter(t => {
+          const tomorrow = new Date();
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          return new Date(t.due_date).toDateString() === tomorrow.toDateString();
+        }).length,
+        dueThisWeek: tasks.filter(t => {
+          const weekFromNow = new Date();
+          weekFromNow.setDate(weekFromNow.getDate() + 7);
+          return new Date(t.due_date) <= weekFromNow && new Date(t.due_date) >= new Date();
+        }).length,
+        byPriority: {
+          'Low': tasks.filter(t => t.priority === 'Low').length,
+          'Medium': tasks.filter(t => t.priority === 'Medium').length,
+          'High': tasks.filter(t => t.priority === 'High').length,
+          'Urgent': tasks.filter(t => t.priority === 'Urgent').length,
+        },
+        byType: tasks.reduce((acc, task) => {
+          acc[task.type] = (acc[task.type] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>),
+        completionRate: tasks.length > 0 ? (tasks.filter(t => t.status === 'Completed' || t.status === 'Closed').length / tasks.length) * 100 : 0,
+      };
       
-      throw new Error(response.message || 'Failed to assign task');
-    } catch (error) {
-      console.error('Assign task error:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Complete task
-   */
-  async completeTask(id: string): Promise<Task> {
-    try {
-      const response = await httpClient.patch<Task>(`/tasks/${id}/complete`);
-      
-      if (response.success && response.data) {
-        return response.data;
-      }
-      
-      throw new Error(response.message || 'Failed to complete task');
-    } catch (error) {
-      console.error('Complete task error:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Reopen task
-   */
-  async reopenTask(id: string): Promise<Task> {
-    try {
-      const response = await httpClient.patch<Task>(`/tasks/${id}/reopen`);
-      
-      if (response.success && response.data) {
-        return response.data;
-      }
-      
-      throw new Error(response.message || 'Failed to reopen task');
-    } catch (error) {
-      console.error('Reopen task error:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Add tags to task
-   */
-  async addTags(id: string, tags: string[]): Promise<Task> {
-    try {
-      const response = await httpClient.patch<Task>(`/tasks/${id}/tags`, { tags });
-      
-      if (response.success && response.data) {
-        return response.data;
-      }
-      
-      throw new Error(response.message || 'Failed to add tags');
-    } catch (error) {
-      console.error('Add tags error:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Remove tags from task
-   */
-  async removeTags(id: string, tags: string[]): Promise<Task> {
-    try {
-      const response = await httpClient.patch<Task>(`/tasks/${id}/tags/remove`, { tags });
-      
-      if (response.success && response.data) {
-        return response.data;
-      }
-      
-      throw new Error(response.message || 'Failed to remove tags');
-    } catch (error) {
-      console.error('Remove tags error:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get task statistics
-   */
-  async getTaskStats(filters?: TaskFilters): Promise<TaskStats> {
-    try {
-      const params: Record<string, string> = {};
-      
-      if (filters) {
-        if (filters.assigneeId) params.assigneeId = filters.assigneeId;
-        if (filters.relatedType) params.relatedType = filters.relatedType;
-        if (filters.relatedId) params.relatedId = filters.relatedId;
-        if (filters.dueDateFrom) params.dueDateFrom = filters.dueDateFrom;
-        if (filters.dueDateTo) params.dueDateTo = filters.dueDateTo;
-      }
-
-      const response = await httpClient.get<TaskStats>('/tasks/stats', params);
-      
-      if (response.success && response.data) {
-        return response.data;
-      }
-      
-      throw new Error(response.message || 'Failed to fetch task statistics');
+      return stats;
     } catch (error) {
       console.error('Get task stats error:', error);
       throw error;
@@ -334,38 +255,18 @@ class TaskService {
   /**
    * Search tasks
    */
-  async searchTasks(query: string, limit: number = 10): Promise<Task[]> {
+  async searchTasks(query: string): Promise<Task[]> {
     try {
-      const response = await httpClient.get<Task[]>('/tasks/search', {
-        q: query,
-        limit: limit.toString(),
-      });
+      const tasks = await this.getTasks();
       
-      if (response.success && response.data) {
-        return response.data;
-      }
-      
-      throw new Error(response.message || 'Failed to search tasks');
+      return tasks.filter(task =>
+        task.title.toLowerCase().includes(query.toLowerCase()) ||
+        task.description.toLowerCase().includes(query.toLowerCase()) ||
+        task.type.toLowerCase().includes(query.toLowerCase()) ||
+        task.related_to.toLowerCase().includes(query.toLowerCase())
+      );
     } catch (error) {
       console.error('Search tasks error:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get tasks by assignee
-   */
-  async getTasksByAssignee(assigneeId: string): Promise<Task[]> {
-    try {
-      const response = await httpClient.get<Task[]>(`/tasks/assignee/${assigneeId}`);
-      
-      if (response.success && response.data) {
-        return response.data;
-      }
-      
-      throw new Error(response.message || 'Failed to fetch tasks by assignee');
-    } catch (error) {
-      console.error('Get tasks by assignee error:', error);
       throw error;
     }
   }
@@ -375,13 +276,14 @@ class TaskService {
    */
   async getOverdueTasks(): Promise<Task[]> {
     try {
-      const response = await httpClient.get<Task[]>('/tasks/overdue');
+      const tasks = await this.getTasks();
+      const now = new Date();
       
-      if (response.success && response.data) {
-        return response.data;
-      }
-      
-      throw new Error(response.message || 'Failed to fetch overdue tasks');
+      return tasks.filter(task => 
+        new Date(task.due_date) < now && 
+        task.status !== 'Completed' && 
+        task.status !== 'Closed'
+      );
     } catch (error) {
       console.error('Get overdue tasks error:', error);
       throw error;
@@ -393,13 +295,12 @@ class TaskService {
    */
   async getTasksDueToday(): Promise<Task[]> {
     try {
-      const response = await httpClient.get<Task[]>('/tasks/due-today');
+      const tasks = await this.getTasks();
+      const today = new Date().toDateString();
       
-      if (response.success && response.data) {
-        return response.data;
-      }
-      
-      throw new Error(response.message || 'Failed to fetch tasks due today');
+      return tasks.filter(task => 
+        new Date(task.due_date).toDateString() === today
+      );
     } catch (error) {
       console.error('Get tasks due today error:', error);
       throw error;
@@ -411,15 +312,11 @@ class TaskService {
    */
   async getRecentTasks(limit: number = 5): Promise<Task[]> {
     try {
-      const response = await httpClient.get<Task[]>('/tasks/recent', {
-        limit: limit.toString(),
-      });
+      const tasks = await this.getTasks();
       
-      if (response.success && response.data) {
-        return response.data;
-      }
-      
-      throw new Error(response.message || 'Failed to fetch recent tasks');
+      return tasks
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        .slice(0, limit);
     } catch (error) {
       console.error('Get recent tasks error:', error);
       throw error;
@@ -427,61 +324,28 @@ class TaskService {
   }
 
   /**
-   * Get all available tags
+   * Filter tasks
    */
-  async getTags(): Promise<string[]> {
-    try {
-      const response = await httpClient.get<string[]>('/tasks/tags');
-      
-      if (response.success && response.data) {
-        return response.data;
+  filterTasks(tasks: Task[], filters: TaskFilters): Task[] {
+    return tasks.filter(task => {
+      if (filters.status && task.status !== filters.status) return false;
+      if (filters.priority && task.priority !== filters.priority) return false;
+      if (filters.type && task.type !== filters.type) return false;
+      if (filters.assignee_id && task.assignee_id !== filters.assignee_id) return false;
+      if (filters.search) {
+        const searchLower = filters.search.toLowerCase();
+        if (!task.title.toLowerCase().includes(searchLower) &&
+            !task.description.toLowerCase().includes(searchLower) &&
+            !task.type.toLowerCase().includes(searchLower) &&
+            !task.related_to.toLowerCase().includes(searchLower)) {
+          return false;
+        }
       }
+      if (filters.due_date_from && new Date(task.due_date) < new Date(filters.due_date_from)) return false;
+      if (filters.due_date_to && new Date(task.due_date) > new Date(filters.due_date_to)) return false;
       
-      throw new Error(response.message || 'Failed to fetch tags');
-    } catch (error) {
-      console.error('Get tags error:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Export tasks to CSV
-   */
-  async exportTasks(filters?: TaskFilters): Promise<Blob> {
-    try {
-      const params: Record<string, string> = {};
-      
-      if (filters) {
-        if (filters.status) params.status = filters.status;
-        if (filters.priority) params.priority = filters.priority;
-        if (filters.type) params.type = filters.type;
-        if (filters.assigneeId) params.assigneeId = filters.assigneeId;
-        if (filters.relatedType) params.relatedType = filters.relatedType;
-        if (filters.relatedId) params.relatedId = filters.relatedId;
-        if (filters.tags?.length) params.tags = filters.tags.join(',');
-        if (filters.dueDateFrom) params.dueDateFrom = filters.dueDateFrom;
-        if (filters.dueDateTo) params.dueDateTo = filters.dueDateTo;
-        if (filters.search) params.search = filters.search;
-      }
-
-      const queryString = new URLSearchParams(params).toString();
-      const url = `${httpClient['baseURL']}/tasks/export${queryString ? `?${queryString}` : ''}`;
-      
-      const response = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${httpClient['getToken']()}`,
-        },
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to export tasks');
-      }
-      
-      return await response.blob();
-    } catch (error) {
-      console.error('Export tasks error:', error);
-      throw error;
-    }
+      return true;
+    });
   }
 }
 
