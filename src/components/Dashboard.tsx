@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Users, Target, CheckSquare, TrendingUp, DollarSign, Clock, ArrowUpRight, Sparkles, Zap, Plus, X, Building, Mail, Phone, MapPin, Calendar, User } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
+import { authService } from '../services/authService';
 
 interface Contact {
   id: number;
@@ -39,6 +40,10 @@ interface Task {
 
 const Dashboard: React.FC = () => {
   const { t } = useLanguage();
+  
+  // Get user data from auth service
+  const currentUser = authService.getStoredUser();
+  const userDisplayName = authService.getUserDisplayName();
   
   // Modal states
   const [showAddContactModal, setShowAddContactModal] = useState(false);
@@ -250,8 +255,19 @@ const Dashboard: React.FC = () => {
         <div className="absolute inset-0 bg-gradient-to-br from-blue-600/10 via-purple-600/5 to-pink-600/10"></div>
         <div className="relative flex items-center justify-between">
           <div>
-            <h1 className="text-4xl font-bold text-gradient mb-2">{t('welcomeBack')}</h1>
+            <h1 className="text-4xl font-bold text-gradient mb-2">
+              Bon retour, {userDisplayName} ! 👋
+            </h1>
             <p className="text-slate-600 text-lg">{t('welcomeDescription')}</p>
+            {currentUser && (
+              <div className="mt-4 flex items-center space-x-4 text-sm text-slate-500">
+                <span>📧 {currentUser.email}</span>
+                {currentUser.organisation_id && (
+                  <span>🏢 Organisation #{currentUser.organisation_id}</span>
+                )}
+                <span>📅 Membre depuis {new Date(currentUser.created_at).toLocaleDateString('fr-FR')}</span>
+              </div>
+            )}
           </div>
           <div className="hidden lg:block">
             <div className="relative">

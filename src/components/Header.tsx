@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Search, Bell, User, Sparkles, Zap, X, Settings, LogOut, Building, Mail, Phone, MapPin, Calendar, Edit, Save, Clock, CheckCircle, AlertTriangle, Info } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useOrganization } from '../contexts/OrganizationContext';
+import { authService } from '../services/authService';
 import ProfileSidebar from './ProfileSidebar';
 import type { View } from '../App';
 
@@ -34,6 +35,11 @@ const Header: React.FC<HeaderProps> = ({ searchTerm, onSearchChange, activeView,
   const [showProfileSidebar, setShowProfileSidebar] = useState(false);
   const [notificationFilter, setNotificationFilter] = useState<'all' | 'unread' | 'task' | 'appointment' | 'opportunity'>('all');
   const notificationsRef = useRef<HTMLDivElement>(null);
+  
+  // Get user data from auth service
+  const currentUser = authService.getStoredUser();
+  const userDisplayName = authService.getUserDisplayName();
+  const userInitials = authService.getUserInitials();
   
   const [notifications, setNotifications] = useState<Notification[]>([
     {
@@ -605,12 +611,16 @@ const Header: React.FC<HeaderProps> = ({ searchTerm, onSearchChange, activeView,
               onClick={() => setShowProfileSidebar(true)}
               className="flex items-center space-x-2 lg:space-x-3 glass-effect rounded-xl px-3 lg:px-4 py-2 lg:py-3 hover:shadow-lg transition-all duration-300 group"
             >
-              <div className="bg-gradient-to-br from-emerald-400 to-cyan-500 rounded-xl p-1.5 lg:p-2 group-hover:scale-110 transition-transform">
-                <User size={14} className="lg:w-4 lg:h-4 text-white" />
+              <div className="bg-gradient-to-br from-emerald-400 to-cyan-500 rounded-xl p-1.5 lg:p-2 group-hover:scale-110 transition-transform flex items-center justify-center">
+                <span className="text-white font-bold text-xs lg:text-sm">{userInitials}</span>
               </div>
               <div className="text-left hidden sm:block">
-                <span className="text-xs lg:text-sm font-semibold text-slate-700 block">GDP Admin</span>
-                <span className="text-xs text-slate-500">{currentOrganization?.name}</span>
+                <span className="text-xs lg:text-sm font-semibold text-slate-700 block truncate max-w-24 lg:max-w-32">
+                  {userDisplayName}
+                </span>
+                <span className="text-xs text-slate-500 truncate max-w-24 lg:max-w-32 block">
+                  {currentUser?.email || currentOrganization?.name}
+                </span>
               </div>
             </button>
           </div>

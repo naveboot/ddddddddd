@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useOrganization } from '../contexts/OrganizationContext';
+import { authService } from '../services/authService';
 
 interface ProfileSidebarProps {
   isOpen: boolean;
@@ -45,13 +46,18 @@ const ProfileSidebar: React.FC<ProfileSidebarProps> = ({
   const { currentOrganization } = useOrganization();
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   
+  // Get current user data from auth service
+  const currentUser = authService.getStoredUser();
+  const userDisplayName = authService.getUserDisplayName();
+  const userInitials = authService.getUserInitials();
+  
   const [userProfile, setUserProfile] = useState<UserProfile>({
-    name: 'GDP Admin',
-    email: 'admin@gdptechnologies.com',
-    phone: '+33 1 23 45 67 89',
-    location: 'Paris, France',
-    position: 'Administrateur Principal',
-    memberSince: 'Janvier 2024',
+    name: currentUser?.name || userDisplayName,
+    email: currentUser?.email || '',
+    phone: '+33 1 23 45 67 89', // Default phone - you might want to add this to user model
+    location: 'Paris, France', // Default location - you might want to add this to user model
+    position: 'Utilisateur', // Default position - you might want to add this to user model
+    memberSince: currentUser?.created_at ? new Date(currentUser.created_at).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }) : 'Janvier 2024',
   });
   
   const [editedProfile, setEditedProfile] = useState<UserProfile>(userProfile);
@@ -61,10 +67,21 @@ const ProfileSidebar: React.FC<ProfileSidebarProps> = ({
     setIsEditingProfile(true);
   };
 
-  const handleSaveProfile = () => {
-    setUserProfile(editedProfile);
-    setIsEditingProfile(false);
-    console.log('Profile saved:', editedProfile);
+  const handleSaveProfile = async () => {
+    try {
+      // Update the profile via auth service
+      await authService.updateProfile({
+        name: editedProfile.name,
+        email: editedProfile.email,
+      });
+      
+      setUserProfile(editedProfile);
+      setIsEditingProfile(false);
+      console.log('Profile saved:', editedProfile);
+    } catch (error) {
+      console.error('Failed to save profile:', error);
+      // You might want to show an error message to the user
+    }
   };
 
   const handleCancelEdit = () => {
@@ -137,8 +154,8 @@ const ProfileSidebar: React.FC<ProfileSidebarProps> = ({
           </button>
           
           <div className="flex items-center space-x-4 mb-4">
-            <div className="bg-white/20 rounded-2xl p-4 backdrop-blur-sm">
-              <User size={32} className="text-white" />
+            <div className="bg-white/20 rounded-2xl p-4 backdrop-blur-sm flex items-center justify-center">
+              <span className="text-white font-bold text-xl">{userInitials}</span>
             </div>
             <div>
               <h2 className="text-xl font-bold">{userProfile.name}</h2>
@@ -212,6 +229,17 @@ const ProfileSidebar: React.FC<ProfileSidebarProps> = ({
                     <p className="font-medium text-gray-900 truncate">{userProfile.memberSince}</p>
                   </div>
                 </div>
+                {currentUser?.email_verified_at && (
+                  <div className="flex items-center space-x-3 p-4 bg-green-50 rounded-xl">
+                    <CheckCircle size={20} className="text-green-600 flex-shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm text-gray-600">Email vérifié</p>
+                      <p className="font-medium text-green-700 text-sm">
+                        {new Date(currentUser.email_verified_at).toLocaleDateString('fr-FR')}
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="space-y-4">
@@ -289,6 +317,12 @@ const ProfileSidebar: React.FC<ProfileSidebarProps> = ({
                   <p className="font-medium text-gray-900">{currentOrganization?.memberCount}</p>
                 </div>
               </div>
+              {currentUser?.organisation_id && (
+                <div className="mt-4 pt-4 border-t border-blue-200">
+                  <p className="text-sm text-gray-600">ID Organisation</p>
+                  <p className="font-mono text-sm text-gray-900">{currentUser.organisation_id}</p>
+                </div>
+              )}
             </div>
           </div>
 

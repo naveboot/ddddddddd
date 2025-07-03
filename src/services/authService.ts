@@ -33,6 +33,12 @@ export interface User {
   refresh_token: string;
 }
 
+export interface Organization {
+  id: number;
+  name: string;
+  // Add other organization fields as needed
+}
+
 export interface PasswordResetRequest {
   email: string;
 }
@@ -143,6 +149,29 @@ class AuthService {
     } catch (error) {
       console.error('Get current user error:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Get user's organization information
+   */
+  async getUserOrganization(): Promise<Organization | null> {
+    try {
+      const user = this.getStoredUser();
+      if (!user || !user.organisation_id) {
+        return null;
+      }
+
+      const response = await httpClient.get<Organization>(`/organizations/${user.organisation_id}`);
+      
+      if (response.success && response.data) {
+        return response.data;
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Get user organization error:', error);
+      return null;
     }
   }
 
@@ -305,6 +334,34 @@ class AuthService {
    */
   getStoredUser(): User | null {
     return TokenManager.getUser();
+  }
+
+  /**
+   * Get user display name (fallback to email if name not available)
+   */
+  getUserDisplayName(): string {
+    const user = this.getStoredUser();
+    if (!user) return 'User';
+    return user.name || user.email || 'User';
+  }
+
+  /**
+   * Get user initials for avatar
+   */
+  getUserInitials(): string {
+    const user = this.getStoredUser();
+    if (!user) return 'U';
+    
+    if (user.name) {
+      return user.name
+        .split(' ')
+        .map(word => word.charAt(0))
+        .join('')
+        .toUpperCase()
+        .slice(0, 2);
+    }
+    
+    return user.email.charAt(0).toUpperCase();
   }
 
   /**

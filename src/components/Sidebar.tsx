@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { LayoutDashboard, Users, Target, CheckSquare, Calendar, Mail, BarChart3, Settings, Zap, Link, Sparkles, Menu, X, Building, ChevronDown, Check, UserPlus } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useOrganization } from '../contexts/OrganizationContext';
+import { authService } from '../services/authService';
 import type { View } from '../App';
 
 interface SidebarProps {
@@ -14,6 +15,11 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange }) => {
   const [showOrganizations, setShowOrganizations] = useState(false);
   const { t } = useLanguage();
   const { currentOrganization, organizations, setCurrentOrganization } = useOrganization();
+  
+  // Get user data from auth service
+  const currentUser = authService.getStoredUser();
+  const userDisplayName = authService.getUserDisplayName();
+  const userInitials = authService.getUserInitials();
 
   const menuItems = [
     { id: 'dashboard' as View, label: t('dashboard'), icon: LayoutDashboard },
@@ -237,12 +243,12 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange }) => {
           {/* User Profile */}
           <div className="glass-effect rounded-xl p-4 border border-white/10">
             <div className="flex items-center space-x-3">
-              <div className="bg-gradient-to-br from-emerald-400 to-cyan-500 rounded-xl p-2">
-                <span className="text-white font-bold text-sm">GA</span>
+              <div className="bg-gradient-to-br from-emerald-400 to-cyan-500 rounded-xl p-2 flex items-center justify-center">
+                <span className="text-white font-bold text-sm">{userInitials}</span>
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-white font-semibold text-sm">GDP Admin</p>
-                <p className="text-slate-400 text-xs truncate">{currentOrganization?.name}</p>
+                <p className="text-white font-semibold text-sm truncate">{userDisplayName}</p>
+                <p className="text-slate-400 text-xs truncate">{currentUser?.email || currentOrganization?.name}</p>
               </div>
             </div>
           </div>
